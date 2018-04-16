@@ -13,38 +13,9 @@
   revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
   version = "v0.8.0"
 
-[[projects]]
-  branch = "master"
-  name = "github.com/robertkrimen/otto"
-  packages = [
-    ".",
-    "ast",
-    "dbg",
-    "file",
-    "parser",
-    "registry",
-    "token"
-  ]
-  revision = "6c383dd335ef8dcccef05e651ce1eccfe4d0f011"
-
-[[projects]]
-  branch = "master"
-  name = "github.com/yeouchien/go-cloudflare-scraper"
-  packages = ["."]
-  revision = "a69b02d9e0d99c7dbbfdde14cded5cbd7835cf49"
-
-[[projects]]
-  name = "gopkg.in/sourcemap.v1"
-  packages = [
-    ".",
-    "base64vlq"
-  ]
-  revision = "6e83acea0053641eff084973fee085f0c193c61a"
-  version = "v1.0.5"
-
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "466846be21eefe1b12bd0eb002eaff5061b197b93bc4b634ef35a0579f5714c5"
+  inputs-digest = "5d13bfef32e045fb784c662b6a13f64520d00011b18871a9cf339344fd3c8db4"
   solver-name = "gps-cdcl"
   solver-version = 1

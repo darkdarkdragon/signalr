@@ -1,6 +1,7 @@
 package signalr
 
 import (
+	"net/http/cookiejar"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -20,7 +21,7 @@ import (
 	// scraper "github.com/carterjones/go-cloudflare-scraper"
 	"github.com/darkdarkdragon/signalr/hubs"
 	// scraper "github.com/9cat/go-cloudflare-scraper"
-	scraper "github.com/yeouchien/go-cloudflare-scraper"
+	// scraper "github.com/yeouchien/go-cloudflare-scraper"
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
 )
@@ -678,10 +679,15 @@ func (c *Client) Close() {
 func New(host, protocol, endpoint, connectionData string, params map[string]string) *Client {
 	// Create an HTTP client that supports CloudFlare-protected sites by
 	// default.
-	cfTransport, _ := scraper.NewTransport(http.DefaultTransport)
+	// cfTransport, _ := scraper.NewTransport(http.DefaultTransport)
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		return nil
+	}
 	httpClient := &http.Client{
-		Transport: cfTransport,
-		Jar:       cfTransport.Cookies,
+		// Transport: cfTransport,
+		// Jar:       cfTransport.Cookies,
+		Jar:       jar,
 	}
 
 	return &Client{
