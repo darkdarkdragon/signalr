@@ -1,21 +1,43 @@
 package main
 
 import (
-	"time"
+	"bytes"
+	"compress/flate"
+	"encoding/base64"
 	"io/ioutil"
 	"log"
-	"bytes"
-	"encoding/base64"
-	"compress/flate"
+	"time"
 
 	"github.com/darkdarkdragon/signalr"
 	"github.com/darkdarkdragon/signalr/hubs"
 )
 
+func decodeMes(mes []byte) string {
+	// log.Println(mes)
+	// mesbin, er := base64.StdEncoding.DecodeString(mes)
+	mesbin := make([]byte, len(mes))
+	log.Printf("input byte 0 %d", mes[0])
+	bytesNum, er := base64.StdEncoding.Decode(mesbin, mes)
+	if er != nil {
+		log.Printf("error base dec: %+v %s bytes num %d", er, er, bytesNum)
+		return ""
+	}
+	// log.Println("base decoded:", string(mesbin))
+	b := bytes.NewReader(mesbin)
+	z := flate.NewReader(b)
+	p, err := ioutil.ReadAll(z)
+	z.Close()
+	if err != nil {
+		log.Printf("error decompressing: %v", err)
+		return ""
+	}
+	return string(p)
+}
+
 func main() {
 	// Prepare a SignalR client.
 	c := signalr.New(
-		"socket.bittrex.com",
+		"beta.bittrex.com",
 		"1.5",
 		"/signalr",
 		// `[{"name":"corehub"}]`,
@@ -27,13 +49,13 @@ func main() {
 	c.Headers["User-Agent"] = "Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2228.0 Safari/537.36"
 
 	// Send note to user about CloudFlare.
-	log.Println("Bypassing CloudFlare. This takes about 5 seconds.")
+	// log.Println("Bypassing CloudFlare. This takes about 5 seconds.")
 
 	// Define message and error handlers.
 	msgHandler := func(msg signalr.Message) {
 		log.Printf("%+v", msg)
 		if len(msg.R) > 0 {
-
+			log.Println(decodeMes(msg.R[1:len(msg.R)-1]))
 		}
 		if len(msg.M) == 0 {
 			return
