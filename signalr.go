@@ -18,10 +18,7 @@ import (
 	"sync"
 	"time"
 
-	// scraper "github.com/carterjones/go-cloudflare-scraper"
 	"github.com/darkdarkdragon/signalr/hubs"
-	// scraper "github.com/9cat/go-cloudflare-scraper"
-	// scraper "github.com/yeouchien/go-cloudflare-scraper"
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
 )
