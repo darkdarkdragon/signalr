@@ -17,8 +17,10 @@ import (
 	"sync"
 	"time"
 
-	scraper "github.com/carterjones/go-cloudflare-scraper"
-	"github.com/carterjones/signalr/hubs"
+	// scraper "github.com/carterjones/go-cloudflare-scraper"
+	"github.com/darkdarkdragon/signalr/hubs"
+	// scraper "github.com/9cat/go-cloudflare-scraper"
+	scraper "github.com/yeouchien/go-cloudflare-scraper"
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
 )
@@ -676,7 +678,7 @@ func (c *Client) Close() {
 func New(host, protocol, endpoint, connectionData string, params map[string]string) *Client {
 	// Create an HTTP client that supports CloudFlare-protected sites by
 	// default.
-	cfTransport := scraper.NewTransport(http.DefaultTransport)
+	cfTransport, _ := scraper.NewTransport(http.DefaultTransport)
 	httpClient := &http.Client{
 		Transport: cfTransport,
 		Jar:       cfTransport.Cookies,
@@ -696,7 +698,7 @@ func New(host, protocol, endpoint, connectionData string, params map[string]stri
 		MaxConnectRetries:   5,
 		MaxReconnectRetries: 5,
 		MaxStartRetries:     5,
-		RetryWaitDuration:   1 * time.Minute,
+		RetryWaitDuration:   10 * time.Second,
 	}
 }
 
@@ -931,7 +933,7 @@ func websocketErrCode(err error) int {
 
 func debugEnabled() bool {
 	v := os.Getenv("DEBUG")
-	return v != ""
+	return v != "" || true
 }
 
 func debugMessage(msg string, v ...interface{}) {

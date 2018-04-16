@@ -1,6 +1,3 @@
-[[constraint]]
-  name = "github.com/carterjones/go-cloudflare-scraper"
-  version = "0.1.2"
 
 [[constraint]]
   name = "github.com/gorilla/websocket"

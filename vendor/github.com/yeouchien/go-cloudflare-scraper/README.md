@@ -10,11 +10,15 @@ Usage
 package main
 
 import (
-    "github.com/carterjones/go-cloudflare-scraper"
+    "github.com/cardigann/go-cloudflare-scraper"
 )
 
+
 func main() {
-	scraper := scraper.NewTransport(http.DefaultTransport)
+	scraper, err := scraper.NewTransport(http.DefaultTransport)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	c := http.Client{Transport: scraper}
 
