@@ -725,8 +725,8 @@ func New(host, protocol, endpoint, connectionData string, params map[string]stri
 		MaxConnectRetries:           5,
 		MaxReconnectRetries:         5,
 		MaxStartRetries:             5,
-		RetryWaitDuration:           1 * time.Minute,
-		MaxReconnectAttemptDuration: 5 * time.Minute,
+		RetryWaitDuration:           10 * time.Second,
+		MaxReconnectAttemptDuration: 15 * time.Minute,
 	}
 }
 
