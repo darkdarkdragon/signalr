@@ -18,7 +18,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/darkdarkdragon/signalr/hubs"
+	"github.com/carterjones/signalr/hubs"
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
 )

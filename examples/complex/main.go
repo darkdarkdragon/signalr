@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 
-	"github.com/darkdarkdragon/signalr"
+	"github.com/carterjones/signalr"
 )
 
 func main() {

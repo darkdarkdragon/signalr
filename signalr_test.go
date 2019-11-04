@@ -17,8 +17,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/darkdarkdragon/signalr"
-	"github.com/darkdarkdragon/signalr/hubs"
+	"github.com/carterjones/signalr"
+	"github.com/carterjones/signalr/hubs"
 	"github.com/gorilla/websocket"
 )
 
