@@ -87,9 +87,9 @@ func newTestServer(fn http.HandlerFunc, tls bool) *httptest.Server {
 
 		// Save the testing certificate to the TLS client config.
 		//
-		// I'm not sure why ts.TLS doesn't contain certificate
-		// information. However, this seems to make the testing TLS
-		// certificate be trusted by the client.
+		// I'm not sure why ts.TLS doesn't contain certificate information.
+		// However, this seems to make the testing TLS certificate be trusted by
+		// the client.
 		ts.TLS.RootCAs = x509.NewCertPool()
 		ts.TLS.RootCAs.AddCert(ts.Certificate())
 	} else {
@@ -116,7 +116,8 @@ func newTestClient(protocol, endpoint, connectionData string, params map[string]
 	return c
 }
 
-func negotiate(w http.ResponseWriter, r *http.Request) {
+func negotiate(w http.ResponseWriter, _ *http.Request) {
+	// nolint:lll
 	_, err := w.Write([]byte(`{"ConnectionToken":"hello world","ConnectionId":"1234-ABC","URL":"/signalr","ProtocolVersion":"1337"}`))
 	if err != nil {
 		log.Panic(err)
@@ -153,7 +154,7 @@ func reconnect(w http.ResponseWriter, r *http.Request) {
 	connect(w, r)
 }
 
-func start(w http.ResponseWriter, r *http.Request) {
+func start(w http.ResponseWriter, _ *http.Request) {
 	_, err := w.Write([]byte(`{"Response":"started"}`))
 	if err != nil {
 		log.Panic(err)
@@ -202,27 +203,18 @@ func panicErr(err error) {
 	}
 }
 
-// Create a variable to store the logs that we will print after the tests
-// complete.
-var logs = ""
-var logsMux = sync.Mutex{}
-
 // Use a custom log function so that they can be enabled only when an
 // environment variable is set.
-func logEvent(section, id, msg string) {
+func logEvent(section, id, msg string, logs *string, logsMux sync.Locker) {
 	logEvents := os.Getenv("LOG_EVENTS")
 	if logEvents != "" {
 		logsMux.Lock()
-		logs = logs + fmt.Sprintf("[%s | %s] %s\n", section, id, msg)
+		*logs += fmt.Sprintf("[%s | %s] %s\n", section, id, msg)
 		logsMux.Unlock()
 	}
 }
 
-// This is the amount of time to wait before failing a test. This way, some
-// tests that rely on concurrency don't hold up the whole test suite.
-const testTimeoutDuration = 5 * time.Second
-
-func TestClient_readMessages(t *testing.T) { // nolint: gocyclo
+func TestClient_ReadMessages(t *testing.T) { // nolint: gocyclo
 	t.Parallel()
 
 	cases := map[string]struct {
@@ -355,18 +347,24 @@ func TestClient_readMessages(t *testing.T) { // nolint: gocyclo
 		},
 	}
 
+	// Create a variable to store the logs that we will print after the tests
+	// complete.
+	var logs = ""
+	var logsMux = sync.Mutex{}
+
 	for id, tc := range cases {
 		ts := newTestServer(http.HandlerFunc(
 			func(w http.ResponseWriter, r *http.Request) {
-				if strings.Contains(r.URL.Path, "/negotiate") {
+				switch {
+				case strings.Contains(r.URL.Path, "/negotiate"):
 					negotiate(w, r)
-				} else if strings.Contains(r.URL.Path, "/connect") {
+				case strings.Contains(r.URL.Path, "/connect"):
 					connect(w, r)
-				} else if strings.Contains(r.URL.Path, "/reconnect") {
+				case strings.Contains(r.URL.Path, "/reconnect"):
 					reconnect(w, r)
-				} else if strings.Contains(r.URL.Path, "/start") {
+				case strings.Contains(r.URL.Path, "/start"):
 					start(w, r)
-				} else {
+				default:
 					log.Println("url:", r.URL)
 				}
 			}), true)
@@ -391,7 +389,6 @@ func TestClient_readMessages(t *testing.T) { // nolint: gocyclo
 
 		// Pipe errors to the connection.
 		inErrs := tc.inErrs()
-		timeoutCh := make(chan struct{})
 
 		var wg sync.WaitGroup
 		wg.Add(2)
@@ -399,25 +396,19 @@ func TestClient_readMessages(t *testing.T) { // nolint: gocyclo
 			for tErr := range inErrs {
 				fconn.errs <- errors.New(tErr)
 			}
-			logEvent("writer", id, "finished sending errors")
+			logEvent("writer", id, "finished sending errors", &logs, &logsMux)
 
 			// If we don't expect any errors...
 			if wantErr == nil {
 				// Signal that the connection should close.
 				c.Close()
-				logEvent("writer", id, "signaled to close channel (nil error expected)")
+				logEvent("writer", id, "signaled to close channel (nil error expected)", &logs, &logsMux)
 
 				// Mark this goroutine as done.
 				wg.Done()
-				logEvent("writer", id, "signaled done (nil error expected)")
+				logEvent("writer", id, "signaled done (nil error expected)", &logs, &logsMux)
 				return
 			}
-
-			// If we expect an error, then we wait and then send a
-			// timeout signal so that we don't hold up the rest of
-			// the test suite.
-			time.Sleep(testTimeoutDuration)
-
 		}(id, inErrs, tc.wantErr)
 
 		// Register the fake connection.
@@ -432,15 +423,15 @@ func TestClient_readMessages(t *testing.T) { // nolint: gocyclo
 			msgHandler := func(msg Message) { msgs <- msg }
 			errHandler := func(err error) { errs <- err }
 
-			// Process all messages. This will finish when the
-			// connection is closed.
+			// Process all messages. This will finish when the connection is
+			// closed.
 			c.ReadMessages(msgHandler, errHandler)
-			logEvent("reader", id, "finished reading messages")
+			logEvent("reader", id, "finished reading messages", &logs, &logsMux)
 
-			// At this point, the connection has been closed and the
-			// done signal can be sent.
+			// At this point, the connection has been closed and the done signal
+			// can be sent.
 			wg.Done()
-			logEvent("reader", id, "signaled done")
+			logEvent("reader", id, "signaled done", &logs, &logsMux)
 		}(id)
 
 		// Wait for both loops to be done. Then send the done signal.
@@ -454,19 +445,15 @@ func TestClient_readMessages(t *testing.T) { // nolint: gocyclo
 		for {
 			select {
 			case <-msgs:
-				// Reset the connection so it fails again. This
-				// is the key to the whole test. We are
-				// simulating as lots of combinations of
+				// Reset the connection so it fails again. This is the key to
+				// the whole test. We are simulating as lots of combinations of
 				// consecutive failures.
 				go c.SetConn(fconn)
 			case err = <-errs:
-				logEvent("main  ", id, "err received. breaking.")
+				logEvent("main  ", id, "err received. breaking.", &logs, &logsMux)
 				break loop
 			case <-done:
-				logEvent("main  ", id, "done received. breaking.")
-				break loop
-			case <-timeoutCh:
-				logEvent("main  ", id, "timeout received. breaking.")
+				logEvent("main  ", id, "done received. breaking.", &logs, &logsMux)
 				break loop
 			}
 		}
@@ -475,11 +462,99 @@ func TestClient_readMessages(t *testing.T) { // nolint: gocyclo
 		testErrMatches(t, id, err, tc.wantErr)
 	}
 
-	// We print the accumulated logs because merely printing them to the
-	// screen as they occur tends to affect the timing of these tests, which
-	// results in hard to identify Heisenbugs.
+	// We print the accumulated logs because merely printing them to the screen
+	// as they occur tends to affect the timing of these tests, which results in
+	// hard to identify Heisenbugs.
 	if logs != "" {
 		fmt.Println(logs)
+	}
+}
+
+func TestClient_ReadMessages_earlyClose(t *testing.T) {
+	t.Parallel()
+
+	msgHandler := func(msg Message) {}
+	errHandler := func(err error) {}
+	done := make(chan struct{})
+
+	c := New("", "", "", "", map[string]string{})
+	conn := newFakeConn()
+	c.SetConn(conn)
+
+	// Launch a goroutine that starts the message reading loop. Send a done
+	// signal once the loop terminates.
+	go func() {
+		c.ReadMessages(msgHandler, errHandler)
+		done <- struct{}{}
+	}()
+
+	// Close the loop prior to sending any messages.
+	c.Close()
+
+	// Define a maximum amount of time to wait for his test to complete.
+	maxWaitTime := time.Second * 2
+	select {
+	case <-time.After(maxWaitTime):
+		t.Errorf("ReadMessages_earlyClose: timeout while waiting for message loop to close")
+	case <-done:
+		// Don't do anything; the test was a success since it received the done
+		// signal.
+	}
+}
+
+func TestClient_ReadMessages_longReconnectAttempt(t *testing.T) {
+	t.Parallel()
+
+	msgHandler := func(msg Message) {}
+	errHandler := func(err error) {}
+	done := make(chan struct{})
+
+	ts := newTestServer(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case strings.Contains(r.URL.Path, "/negotiate"):
+				negotiate(w, r)
+			case strings.Contains(r.URL.Path, "/connect"):
+				connect(w, r)
+			case strings.Contains(r.URL.Path, "/reconnect"):
+				// Intentionally wait indefinitely on reconnect.
+				select {}
+			case strings.Contains(r.URL.Path, "/start"):
+				start(w, r)
+			default:
+				log.Println("url:", r.URL)
+			}
+		}), true)
+	defer ts.Close()
+
+	c := New("", "", "", "", map[string]string{})
+	conn := newFakeConn()
+	c.SetConn(conn)
+
+	// Launch a goroutine that starts the message reading loop. Send a done
+	// signal once the loop terminates.
+	go func() {
+		c.ReadMessages(msgHandler, errHandler)
+		done <- struct{}{}
+	}()
+
+	// Define a maximum reconnect attempt time for the client.
+	c.MaxReconnectAttemptDuration = 50 * time.Millisecond
+
+	// Define a maximum amount of time to wait for his test to complete, which
+	// is much longer than the reconnect attempt.
+	maxWaitTime := time.Second * 2
+
+	// Send a test error that will eventually hang while being processed during
+	// the reconnection.
+	conn.errs <- errors.New("websocket: close 1006 (abnormal closure)")
+
+	select {
+	case <-time.After(maxWaitTime):
+		t.Errorf("ReadMessages_longReconnectAttempt: timeout while waiting for message loop to close")
+	case <-done:
+		// Don't do anything; the test was a success since it received the done
+		// signal.
 	}
 }
 
@@ -874,6 +949,7 @@ func TestProcessNegotiateResponse(t *testing.T) {
 		},
 		"deferred close failure after normal return": {
 			body: fakeReadCloser{
+				// nolint:lll
 				Buffer: bytes.NewBufferString(`{"ConnectionToken":"123abc","ConnectionID":"456def","ProtocolVersion":"my-custom-protocol","Url":"super-awesome-signalr"}`),
 				cerr:   errors.New("fake close error"),
 			},
@@ -895,6 +971,7 @@ func TestProcessNegotiateResponse(t *testing.T) {
 			wantErr: "json unmarshal failed: invalid character 'i' looking for beginning of value",
 		},
 		"valid data": {
+			// nolint:lll
 			body:            fakeReadCloser{Buffer: bytes.NewBufferString(`{"ConnectionToken":"123abc","ConnectionID":"456def","ProtocolVersion":"my-custom-protocol","Url":"super-awesome-signalr"}`)},
 			connectionToken: "123abc",
 			connectionID:    "456def",

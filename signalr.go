@@ -1,7 +1,6 @@
 package signalr
 
 import (
-	"net/http/cookiejar"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -11,6 +10,7 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"os"
 	"regexp"
@@ -67,6 +67,9 @@ type Client struct {
 	// when contacting the SignalR service.
 	RetryWaitDuration time.Duration
 
+	// The maximum amount of time to spend retrying a reconnect attempt.
+	MaxReconnectAttemptDuration time.Duration
+
 	// This is the connection token set during the negotiate phase of the
 	// protocol and used to uniquely identify the connection to the server
 	// in all subsequent phases of the connection.
@@ -79,6 +82,7 @@ type Client struct {
 	// The groups token that is used during reconnect attempts.
 	//
 	// This is an example groups token:
+	// nolint:lll
 	// yUcSohHrAZGEwK62B4Ao0WYac82p5yeRvHHInBgVmSK7jX++ym3kIgDy466yW/gRPp2l3Py8G45mRLJ9FslB3sKfsDPUNWL1b54cvjaSXCUo0znzyACxrN2Y0kNLR59h7hb6PgOSfy3Z2R5CUSVm5LZg6jg=
 	GroupsToken SafeString
 
@@ -269,7 +273,7 @@ func (c *Client) Reconnect() (*websocket.Conn, error) {
 	}
 
 	// Once complete, set the new connection for this client.
-	c.conn = conn
+	c.SetConn(conn)
 
 	return conn, nil
 }
@@ -282,9 +286,25 @@ func (c *Client) xconnect(url string, isReconnect bool) (*websocket.Conn, error)
 		jar = c.HTTPClient.Jar
 	}
 
+	// Set the proxy to use the value from the environment by default.
+	proxy := http.ProxyFromEnvironment
+
+	// Check to see if the HTTP client transport is defined.
+	if t, ok := c.HTTPClient.Transport.(*http.Transport); ok {
+		// If the client is an HTTP client, then it will have a proxy defined.
+		// By default, this is set to http.ProxyFromEnvironment. If it is not
+		// that function, then it will be some other valid function; otherwise
+		// the code won't compile. Therefore, we choose to use that function as
+		// our proxy.
+		//
+		// For details about the default value of the proxy, see here:
+		// https://github.com/golang/go/blob/cf4691650c3c556f19844a881a32792a919ee8d1/src/net/http/transport.go#L43
+		proxy = t.Proxy
+	}
+
 	// Create a dialer that uses the supplied TLS client configuration.
 	dialer := &websocket.Dialer{
-		Proxy:           http.ProxyFromEnvironment,
+		Proxy:           proxy,
 		TLSClientConfig: c.TLSClientConfig,
 		Jar:             jar,
 	}
@@ -510,18 +530,6 @@ func (c *Client) ReadMessages(msgHandler MsgHandler, errHandler ErrHandler) {
 }
 
 func (c *Client) readMessage(msgHandler MsgHandler, errHandler ErrHandler) bool {
-	c.connMux.Lock()
-
-	// Set up a channel to receive signals from the Client.readMessage
-	// function as well as the goroutine that does the actual
-	// Client.conn.read. This way, the unlock operation is synchronized.
-	unlockCh := make(chan bool, 2)
-	go func() {
-		<-unlockCh
-		<-unlockCh
-		c.connMux.Unlock()
-	}()
-
 	// Set the ok flag to true to indicate that more messages can/should be
 	// read. Set the flag to false later on if this is no longer the case.
 	ok := true
@@ -532,28 +540,33 @@ func (c *Client) readMessage(msgHandler MsgHandler, errHandler ErrHandler) bool 
 
 	// Wait for a message.
 	go func() {
+		c.connMux.Lock()
 		_, p, err := c.conn.ReadMessage()
+		c.connMux.Unlock()
 		if err != nil {
 			errs <- err
 		} else {
 			pCh <- p
 		}
-
-		// Send a signal that the inner function is done processing.
-		unlockCh <- true
 	}()
 
 	select {
 	case p := <-pCh:
 		c.processReadMessagesMessage(p, msgHandler, errHandler)
 	case err := <-errs:
-		ok = c.processReadMessagesError(err, errHandler)
+		errHandled := make(chan bool)
+		go func() {
+			v := c.processReadMessagesError(err, errHandler)
+			errHandled <- v
+		}()
+		select {
+		case ok = <-errHandled:
+		case <-c.close:
+			ok = false
+		}
 	case <-c.close:
 		ok = false
 	}
-
-	// Send a signal that the outer function is done processing.
-	unlockCh <- true
 
 	return ok
 }
@@ -599,7 +612,18 @@ func (c *Client) processReadMessagesError(err error, errHandler ErrHandler) bool
 		fallthrough
 	case 1006:
 		// abnormal closure
-		ok = c.attemptReconnect()
+		okCh := make(chan bool)
+		go func() {
+			v := c.attemptReconnect()
+			okCh <- v
+		}()
+		select {
+		case ok = <-okCh:
+		case <-time.After(c.MaxReconnectAttemptDuration):
+			// Fail if the retry exceeds the maximum amount of time for
+			// reconnects to last.
+			ok = false
+		}
 	default:
 		go errHandler(err)
 	}
@@ -684,24 +708,25 @@ func New(host, protocol, endpoint, connectionData string, params map[string]stri
 	httpClient := &http.Client{
 		// Transport: cfTransport,
 		// Jar:       cfTransport.Cookies,
-		Jar:       jar,
+		Jar: jar,
 	}
 
 	return &Client{
-		Host:                host,
-		Protocol:            protocol,
-		Endpoint:            endpoint,
-		ConnectionData:      connectionData,
-		close:               make(chan struct{}),
-		HTTPClient:          httpClient,
-		Headers:             make(map[string]string),
-		Params:              params,
-		Scheme:              HTTPS,
-		MaxNegotiateRetries: 5,
-		MaxConnectRetries:   5,
-		MaxReconnectRetries: 5,
-		MaxStartRetries:     5,
-		RetryWaitDuration:   10 * time.Second,
+		Host:                        host,
+		Protocol:                    protocol,
+		Endpoint:                    endpoint,
+		ConnectionData:              connectionData,
+		close:                       make(chan struct{}),
+		HTTPClient:                  httpClient,
+		Headers:                     make(map[string]string),
+		Params:                      params,
+		Scheme:                      HTTPS,
+		MaxNegotiateRetries:         5,
+		MaxConnectRetries:           5,
+		MaxReconnectRetries:         5,
+		MaxStartRetries:             5,
+		RetryWaitDuration:           1 * time.Minute,
+		MaxReconnectAttemptDuration: 5 * time.Minute,
 	}
 }
 
@@ -945,10 +970,10 @@ func debugMessage(msg string, v ...interface{}) {
 	}
 }
 
-func prefixedID(ID string) string {
-	if ID == "" {
+func prefixedID(id string) string {
+	if id == "" {
 		return ""
 	}
 
-	return "[" + ID + "] "
+	return "[" + id + "] "
 }

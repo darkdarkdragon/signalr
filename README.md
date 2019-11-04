@@ -1,8 +1,12 @@
 [![GoDoc](https://godoc.org/github.com/carterjones/signalr?status.svg)](https://godoc.org/github.com/carterjones/signalr)
-[![CircleCI](https://circleci.com/gh/carterjones/signalr.svg?style=svg)](https://circleci.com/gh/carterjones/signalr)
+[![Build Status](https://travis-ci.org/carterjones/signalr.svg?branch=master)](https://travis-ci.org/carterjones/signalr)
 [![Go Report Card](https://goreportcard.com/badge/github.com/carterjones/signalr)](https://goreportcard.com/report/github.com/carterjones/signalr)
 [![Maintainability](https://api.codeclimate.com/v1/badges/c561e13d50cdd11e97a1/maintainability)](https://codeclimate.com/github/carterjones/signalr/maintainability)
 [![codecov](https://codecov.io/gh/carterjones/signalr/branch/master/graph/badge.svg)](https://codecov.io/gh/carterjones/signalr)
+
+# Project depricated
+
+Unfortunately, I am no longer able to provide support for this project. Please see https://github.com/carterjones/signalr/network for some forks that have been created.
 
 # Overview
 
@@ -61,6 +65,11 @@ Cryptocurrency examples:
 
 - [Bittrex](https://github.com/carterjones/signalr/blob/master/examples/bittrex/main.go)
 - [Cryptopia](https://github.com/carterjones/signalr/blob/master/examples/cryptopia/main.go)
+
+Proxy examples:
+
+- [No authentication](https://github.com/carterjones/signalr/blob/master/examples/proxy-simple)
+- [With authentication](https://github.com/carterjones/signalr/blob/master/examples/proxy-authenticated)
 
 # Documentation
 
