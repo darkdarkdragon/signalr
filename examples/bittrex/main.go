@@ -3,12 +3,12 @@ package main
 import (
 	"log"
 
-	"github.com/carterjones/signalr"
-	"github.com/carterjones/signalr/hubs"
+	"github.com/darkdarkdragon/signalr"
+	"github.com/darkdarkdragon/signalr/hubs"
 )
 
 // For more extensive use cases and capabilities, please see
-// https://github.com/carterjones/bittrex.
+// https://github.com/darkdarkdragon/bittrex.
 
 func main() {
 	// Prepare a SignalR client.
