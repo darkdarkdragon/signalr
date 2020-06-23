@@ -593,6 +593,7 @@ func (c *Client) processReadMessagesMessage(p []byte, msgHandler MsgHandler, err
 	if msg.C != "" {
 		c.MessageID.Set(msg.C)
 	}
+	p = nil
 
 	go msgHandler(msg)
 }
